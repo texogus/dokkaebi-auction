@@ -1,0 +1,57 @@
+{
+  "name": "dokkaebi-auction",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-packager . 도깨비경매 --platform=darwin --arch=x64 --out=dist-electron --overwrite --ignore='^/build($|/)' --ignore='^/dist($|/)' --ignore='^/dist-electron($|/)' --ignore='^/release($|/)' --ignore='^/\\.git($|/)'",
+    "build:win": "electron-builder --win nsis --x64",
+    "build:win:monitor": "python -m PyInstaller --noconfirm --clean --onefile --name auction-monitor monitor_entry.py"
+  },
+  "build": {
+    "appId": "com.dokkaebi.auction",
+    "productName": "도깨비경매",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "auction/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-monitor/win",
+        "to": "auction-monitor",
+        "filter": [
+          "auction-monitor.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DokkaebiAuction-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "도깨비경매"
+    }
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
+    "electron-packager": "^17.1.2"
+  }
+}

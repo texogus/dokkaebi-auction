@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+node_modules/
+
+build/
+dist/
+dist-electron/
+dist-monitor/
+release/
+
+*.spec
+*.log

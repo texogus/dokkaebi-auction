@@ -1,0 +1,3 @@
+"""YouTube live auction automation package."""
+
+__version__ = "1.1.0"

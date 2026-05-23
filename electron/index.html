@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>도깨비 경매</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>도깨비 경매</h1>
+
+      <form id="settings-form">
+        <fieldset>
+          <legend>방송 연결</legend>
+          <div class="grid">
+            <label>YouTube API 키
+              <input id="api-key" type="password" autocomplete="off" />
+            </label>
+            <label>영상 ID 또는 URL
+              <input id="video-id" type="text" />
+            </label>
+            <label>호스트 키워드
+              <input id="host-keyword" type="text" value="만물도깨비" />
+            </label>
+            <label>폴링 간격(초)
+              <input id="poll-sec" type="number" min="6" value="6" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>파일</legend>
+          <div class="file-grid">
+            <span>회원명단 엑셀</span>
+            <input id="member-file" type="text" />
+            <button id="choose-member-file" type="button">선택</button>
+
+            <span>차단목록 엑셀</span>
+            <input id="blocked-file" type="text" />
+            <button id="choose-blocked-file" type="button">선택</button>
+
+            <span>주문서 저장 폴더</span>
+            <input id="output-dir" type="text" />
+            <button id="choose-output-dir" type="button">선택</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>방송 중 추가 회원</legend>
+          <div class="member-grid">
+            <label>아이디
+              <input id="extra-id" type="text" />
+            </label>
+            <label>고객명
+              <input id="extra-name" type="text" />
+            </label>
+            <label>연락처
+              <input id="extra-phone" type="text" />
+            </label>
+            <label>주소
+              <input id="extra-address" type="text" />
+            </label>
+            <button id="add-member-button" type="button">추가</button>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>아이디</th>
+                <th>고객명</th>
+                <th>연락처</th>
+                <th>주소</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="member-rows"></tbody>
+          </table>
+        </fieldset>
+
+        <fieldset>
+          <legend>진행 로그</legend>
+          <textarea id="log-text" readonly></textarea>
+        </fieldset>
+
+        <div class="actions">
+          <span class="status" id="status-text">대기 중</span>
+          <button id="save-button" type="button">설정 저장</button>
+          <button id="stop-button" type="button" disabled>중지</button>
+          <button id="start-button" class="primary" type="submit">시작</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
