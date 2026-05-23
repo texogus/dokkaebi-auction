@@ -71,6 +71,9 @@ YOUTUBE_API_KEY="발급받은_API_KEY" YOUTUBE_VIDEO_ID="영상ID" python -m auc
 │   ├── workbook.py
 │   └── youtube_client.py
 ├── dist-electron
+│   ├── DokkaebiAuction-darwin-x64
+│   ├── DokkaebiAuction-mac-test.zip
+│   ├── DokkaebiAuction.app
 │   ├── 도깨비경매-darwin-x64
 │   └── 도깨비경매-electron-mac-test.zip
 ├── electron
@@ -88,8 +91,16 @@ YOUTUBE_API_KEY="발급받은_API_KEY" YOUTUBE_VIDEO_ID="영상ID" python -m auc
 ├── package.json
 ├── requirements.txt
 ├── tests
-    ├── __init__.py
-    └── test_parser.py
+│   ├── __init__.py
+│   ├── test_detector.py
+│   ├── test_identity.py
+│   ├── test_members.py
+│   ├── test_monitor_identity.py
+│   ├── test_no_sale.py
+│   ├── test_parser.py
+│   ├── test_product_consistency.py
+│   ├── test_winner.py
+│   └── test_workbook.py
 ├── dokkaebi-auction-windows-build-source.zip
 └── 도깨비경매-windows-build-source.zip
 ```
@@ -98,7 +109,7 @@ YOUTUBE_API_KEY="발급받은_API_KEY" YOUTUBE_VIDEO_ID="영상ID" python -m auc
 
 - `auction/app.py`: 실행 흐름과 상태 관리
 - `auction/config.py`: 환경변수 기반 설정
-- `auction/detector.py`: 경매 시작, 낙찰선, 기준가 감지
+- `auction/detector.py`: 경매/한정판매 시작, 유찰, 낙찰선, 기준가 감지
 - `auction/identity.py`: YouTube 표시이름 정규화
 - `auction/members.py`: 회원/차단 엑셀 로드
 - `auction/monitor.py`: CLI와 Mac 앱이 공유하는 실시간 모니터링 엔진
@@ -117,17 +128,29 @@ YOUTUBE_API_KEY="발급받은_API_KEY" YOUTUBE_VIDEO_ID="영상ID" python -m auc
 - `packaging/build_windows.ps1`: Windows 설치파일 빌드 스크립트
 - `.github/workflows/build-windows.yml`: Windows 설치파일 자동 빌드 워크플로
 - `.gitignore`: 빌드 산출물과 의존성 폴더 제외 설정
-- `dist-electron/도깨비경매-darwin-x64/도깨비경매.app`: 테스트용 Mac 앱
-- `dist-electron/도깨비경매-electron-mac-test.zip`: 앱 전달용 압축 파일
+- `dist-electron/DokkaebiAuction-darwin-x64/DokkaebiAuction.app`: 현재 테스트용 Mac 앱
+- `dist-electron/DokkaebiAuction-mac-test.zip`: 현재 앱 전달용 압축 파일
+- `dist-electron/DokkaebiAuction.app`: Finder에서 압축을 풀어둔 현재 Mac 앱
+- `dist-electron/도깨비경매-darwin-x64/도깨비경매.app`: 이전 한글 이름 Mac 앱
+- `dist-electron/도깨비경매-electron-mac-test.zip`: 이전 한글 이름 앱 압축 파일
 - `package.json`, `package-lock.json`, `node_modules`: Electron 앱 의존성
+- `tests/test_detector.py`: 판매 시작/유찰/기준가 감지 회귀 테스트
+- `tests/test_identity.py`: YouTube 아이디 정규화 테스트
+- `tests/test_members.py`: 회원명단 엑셀 로드 테스트
+- `tests/test_monitor_identity.py`: 모니터링 표시 아이디 테스트
+- `tests/test_no_sale.py`: 유찰 이후 숫자 댓글 무시 테스트
 - `tests/test_parser.py`: 입찰 금액/수량 파싱 회귀 테스트
+- `tests/test_product_consistency.py`: 진행 중 상품명이 중간 상태 메시지로 바뀌지 않는지 테스트
+- `tests/test_winner.py`: 낙찰자 산정 테스트
+- `tests/test_workbook.py`: 주문서 헤더/행 작성 테스트
 - `WINDOWS_BUILD_GUIDE.md`: Windows 설치파일 생성 상세 안내
 - `dokkaebi-auction-windows-build-source.zip`: GitHub 업로드/Windows 빌드용 영문 경로 소스 압축본
 - `도깨비경매-windows-build-source.zip`: 이전 한글 경로 소스 압축본
 
 ## Mac 앱 테스트
 
-이미 만든 테스트 앱은 `dist-electron/도깨비경매-darwin-x64/도깨비경매.app`에 있습니다.
+이미 만든 테스트 앱은 `dist-electron/DokkaebiAuction-darwin-x64/DokkaebiAuction.app`에 있습니다.
+전달용 압축 파일은 `dist-electron/DokkaebiAuction-mac-test.zip`입니다.
 
 다시 빌드하려면 아래 명령을 실행합니다.
 

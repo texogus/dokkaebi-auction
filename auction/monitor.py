@@ -12,8 +12,8 @@ from typing import Callable
 from googleapiclient.errors import HttpError
 
 from .config import Settings
-from .detector import detect_auction, is_auction_start, is_winning_line
-from .identity import normalize_id
+from .detector import detect_auction, is_auction_start, is_no_sale_line, is_winning_line
+from .identity import display_id, normalize_id
 from .members import Member, load_blocked, load_members
 from .parser import is_bid_message, parse_number, parse_qty
 from .winner import Bid, determine_winners
@@ -109,8 +109,9 @@ class AuctionMonitor:
 
                 page_token = response.get("nextPageToken")
                 polling_interval = response.get("pollingIntervalMillis", self.settings.poll_sec * 1000)
+                items = response.get("items", [])
 
-                for item in response.get("items", []):
+                for item in items:
                     if self.stop_event.is_set():
                         break
 
@@ -122,7 +123,7 @@ class AuctionMonitor:
                     snippet = item["snippet"]
                     author = item["authorDetails"]
                     text = snippet.get("displayMessage", "").strip()
-                    display_name = author.get("displayName", "").strip()
+                    display_name = display_id(author.get("displayName", ""))
                     uid = normalize_id(display_name)
                     time_text = parse_kst(snippet.get("publishedAt", ""))
                     is_host = (
@@ -132,7 +133,21 @@ class AuctionMonitor:
                     )
 
                     if is_host:
-                        if is_winning_line(text):
+                        if is_no_sale_line(text):
+                            if in_auction:
+                                label = "선착순" if auction_type == "first_come" else "경매"
+                                self.log(f"\n[{label}] 유찰: 낙찰 없이 종료")
+                            else:
+                                self.log("\n유찰 감지: 진행 중인 판매 없음")
+
+                            in_auction = False
+                            product_name = ""
+                            auction_type = "bidding"
+                            auction_limit = 1
+                            base_price = 0
+                            bids = []
+                            self.log(f"{'-' * 55}")
+                        elif is_winning_line(text):
                             if in_auction and bids:
                                 winners = determine_winners(bids, auction_type, auction_limit)
                                 label = "선착순" if auction_type == "first_come" else "경매"
@@ -180,6 +195,9 @@ class AuctionMonitor:
                             bids = []
                             self.log(f"{'-' * 55}")
                         elif is_auction_start(text):
+                            if in_auction:
+                                self.log(f"진행 중 시작 후보 무시: {text}")
+                                continue
                             details = detect_auction(text)
                             in_auction = True
                             bids = []
@@ -202,6 +220,10 @@ class AuctionMonitor:
                         if value is not None:
                             bids.append(Bid(time_text=time_text, uid=uid, display_name=display_name, value=value))
                             self.log(f"  {display_name:<22} -> {text.strip()!r:>6} ({label}: {value})")
+
+                if len(items) >= 190:
+                    self.log(f"이전 채팅 따라잡는 중: {len(items)}개 처리")
+                    continue
 
                 self.stop_event.wait(max(polling_interval / 1000, self.settings.poll_sec))
         finally:

@@ -28,21 +28,31 @@ def _column_index(headers: list[str], name: str) -> int:
     return headers.index(name) if name in headers else -1
 
 
+def _find_header_row(sheet, required_headers: set[str], max_scan_rows: int = 20) -> tuple[int, list[str]]:
+    for row_number, row in enumerate(sheet.iter_rows(min_row=1, max_row=max_scan_rows, values_only=True), start=1):
+        headers = [str(header).strip() if header else "" for header in row]
+        if required_headers.issubset(set(headers)):
+            return row_number, headers
+    return 1, []
+
+
 def load_members(settings: Settings) -> dict[str, Member]:
     """Load members keyed by normalized YouTube display name."""
     members: dict[str, Member] = {}
     try:
         workbook = openpyxl.load_workbook(settings.member_file, read_only=True, data_only=True)
         sheet = workbook.active
-        raw_headers = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True))
-        headers = [str(header).strip() if header else "" for header in raw_headers]
+        required_headers = {settings.col_id, settings.col_name, settings.col_phone, settings.col_address}
+        header_row, headers = _find_header_row(sheet, required_headers)
+        if not headers:
+            raise ValueError(f"필수 헤더를 찾지 못했습니다: {', '.join(sorted(required_headers))}")
 
         id_col = _column_index(headers, settings.col_id)
         name_col = _column_index(headers, settings.col_name)
         phone_col = _column_index(headers, settings.col_phone)
         address_col = _column_index(headers, settings.col_address)
 
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        for row in sheet.iter_rows(min_row=header_row + 1, values_only=True):
             raw_id = row[id_col] if id_col >= 0 else None
             if not raw_id:
                 continue
