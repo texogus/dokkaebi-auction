@@ -12,7 +12,7 @@ from typing import Callable
 from googleapiclient.errors import HttpError
 
 from .config import Settings
-from .detector import detect_auction, is_auction_start, is_no_sale_line, is_winning_line
+from .detector import detect_auction, detect_bid_increment, is_auction_start, is_no_sale_line, is_winning_line
 from .identity import display_id, normalize_id
 from .members import Member, load_blocked, load_members
 from .parser import is_bid_message, parse_number, parse_qty
@@ -34,8 +34,44 @@ class MonitorResult:
 def _price_and_quantity(auction_type: str, winner_value: float | int, base_price: int) -> tuple[int, int]:
     if auction_type == "first_come":
         return base_price, int(winner_value)
-    price = int(winner_value * 10000) if winner_value < 10 else int(winner_value)
+    price = int(winner_value * 10000)
     return price, 1
+
+
+def _normalize_bid_value(raw_value: float | int, base_price: int) -> float | int:
+    """Normalize compact bids such as 65 as 6.5 for sub-100,000 won starts."""
+    base_manwon = base_price / 10000
+    compact_value = raw_value / 10
+    if 5 <= base_manwon < 10 and 10 <= raw_value < 100 and compact_value >= base_manwon:
+        return compact_value
+    return raw_value
+
+
+def _is_valid_bid_increment(value: float | int, increment: float | None) -> bool:
+    if increment is None or increment <= 0:
+        return True
+    quotient = float(value) / increment
+    return abs(quotient - round(quotient)) < 0.000001
+
+
+def _message_sort_key(item: dict) -> str:
+    return str(item.get("snippet", {}).get("publishedAt", ""))
+
+
+def _poll_wait_seconds(polling_interval_millis: int | float, configured_poll_sec: int, in_auction: bool) -> float:
+    api_wait = max(float(polling_interval_millis) / 1000, 1)
+    if in_auction:
+        return api_wait
+    return max(api_wait, configured_poll_sec)
+
+
+def _removed_message_id(snippet: dict) -> str | None:
+    message_type = snippet.get("type")
+    if message_type == "messageDeletedEvent":
+        return snippet.get("messageDeletedDetails", {}).get("deletedMessageId")
+    if message_type == "messageRetractedEvent":
+        return snippet.get("messageRetractedDetails", {}).get("retractedMessageId")
+    return None
 
 
 def _tags(is_member: bool, is_blocked: bool, duplicate_count: int) -> list[str]:
@@ -85,6 +121,7 @@ class AuctionMonitor:
         auction_type = "bidding"
         auction_limit = 1
         base_price = 0
+        bid_increment: float | None = None
         bids: list[Bid] = []
 
         order_sequence = 1
@@ -92,6 +129,9 @@ class AuctionMonitor:
         all_orders: list[OrderRow] = []
         session_count: dict[str, int] = {}
         processed: set[str] = set()
+        bid_by_message_id: dict[str, Bid] = {}
+        removed_bid_message_ids: set[str] = set()
+        message_sequence = 0
         page_token: str | None = None
 
         self.log(f"실시간 모니터링 시작\n{'-' * 55}")
@@ -106,12 +146,17 @@ class AuctionMonitor:
                     self.log(f"API 오류 {code}: {wait}초 후 재시도")
                     self.stop_event.wait(wait)
                     continue
+                except Exception as exc:
+                    wait = 5 if in_auction else 15
+                    self.log(f"네트워크/API 연결 오류: {wait}초 후 재시도 ({exc})")
+                    self.stop_event.wait(wait)
+                    continue
 
                 page_token = response.get("nextPageToken")
                 polling_interval = response.get("pollingIntervalMillis", self.settings.poll_sec * 1000)
                 items = response.get("items", [])
 
-                for item in items:
+                for item in sorted(items, key=_message_sort_key):
                     if self.stop_event.is_set():
                         break
 
@@ -119,13 +164,27 @@ class AuctionMonitor:
                     if message_id in processed:
                         continue
                     processed.add(message_id)
+                    message_sequence += 1
 
                     snippet = item["snippet"]
+                    removed_message_id = _removed_message_id(snippet)
+                    if removed_message_id:
+                        removed_bid_message_ids.add(removed_message_id)
+                        removed_bid = bid_by_message_id.pop(removed_message_id, None)
+                        if removed_bid:
+                            bids = [bid for bid in bids if bid is not removed_bid]
+                            self.log(f"  취소된 입찰 제외: {removed_bid.display_name}")
+                        continue
+
+                    if snippet.get("type", "textMessageEvent") != "textMessageEvent":
+                        continue
+
                     author = item["authorDetails"]
                     text = snippet.get("displayMessage", "").strip()
                     display_name = display_id(author.get("displayName", ""))
                     uid = normalize_id(display_name)
                     time_text = parse_kst(snippet.get("publishedAt", ""))
+                    published_at = str(snippet.get("publishedAt", ""))
                     is_host = (
                         author.get("isChatOwner", False)
                         or author.get("isChatModerator", False)
@@ -134,21 +193,26 @@ class AuctionMonitor:
 
                     if is_host:
                         if is_no_sale_line(text):
-                            if in_auction:
-                                label = "선착순" if auction_type == "first_come" else "경매"
-                                self.log(f"\n[{label}] 유찰: 낙찰 없이 종료")
-                            else:
-                                self.log("\n유찰 감지: 진행 중인 판매 없음")
+                            if not in_auction:
+                                continue
+
+                            label = "선착순" if auction_type == "first_come" else "경매"
+                            self.log(f"\n[{label}] 유찰: 낙찰 없이 종료")
 
                             in_auction = False
                             product_name = ""
                             auction_type = "bidding"
                             auction_limit = 1
                             base_price = 0
+                            bid_increment = None
                             bids = []
+                            bid_by_message_id = {}
                             self.log(f"{'-' * 55}")
                         elif is_winning_line(text):
-                            if in_auction and bids:
+                            if not in_auction:
+                                continue
+
+                            if bids:
                                 winners = determine_winners(bids, auction_type, auction_limit)
                                 label = "선착순" if auction_type == "first_come" else "경매"
                                 self.log(f"\n[{label}] 낙찰: {len(winners)}명")
@@ -193,6 +257,8 @@ class AuctionMonitor:
 
                             in_auction = False
                             bids = []
+                            bid_by_message_id = {}
+                            bid_increment = None
                             self.log(f"{'-' * 55}")
                         elif is_auction_start(text):
                             if in_auction:
@@ -201,31 +267,53 @@ class AuctionMonitor:
                             details = detect_auction(text)
                             in_auction = True
                             bids = []
+                            bid_by_message_id = {}
                             product_name = text
                             auction_type = details.auction_type
                             auction_limit = details.limit
                             base_price = details.base_price
+                            bid_increment = None
                             self.log(f"\n[{details.type_label}] 시작")
                             self.log(f"   상품: {product_name}")
                             self.log(f"   한정: {auction_limit}개 | 기준가: {base_price:,}원")
+                        else:
+                            detected_increment = detect_bid_increment(text)
+                            if in_auction and auction_type == "bidding" and detected_increment is not None:
+                                bid_increment = detected_increment
+                                self.log(f"   입찰 단위: {int(detected_increment * 10000):,}원")
 
                     elif in_auction and is_bid_message(text):
                         if auction_type == "first_come":
                             value = parse_qty(text)
                             label = "수량"
                         else:
-                            value = parse_number(text)
+                            parsed_value = parse_number(text)
+                            value = _normalize_bid_value(parsed_value, base_price) if parsed_value is not None else None
                             label = "입찰가"
+                            if value is not None and not _is_valid_bid_increment(value, bid_increment):
+                                self.log(f"  입찰 단위 불일치 제외: {display_name} -> {text.strip()!r}")
+                                value = None
 
                         if value is not None:
-                            bids.append(Bid(time_text=time_text, uid=uid, display_name=display_name, value=value))
+                            if message_id in removed_bid_message_ids:
+                                continue
+                            bid = Bid(
+                                time_text=time_text,
+                                uid=uid,
+                                display_name=display_name,
+                                value=value,
+                                published_at=published_at,
+                                sequence=message_sequence,
+                            )
+                            bids.append(bid)
+                            bid_by_message_id[message_id] = bid
                             self.log(f"  {display_name:<22} -> {text.strip()!r:>6} ({label}: {value})")
 
                 if len(items) >= 190:
                     self.log(f"이전 채팅 따라잡는 중: {len(items)}개 처리")
                     continue
 
-                self.stop_event.wait(max(polling_interval / 1000, self.settings.poll_sec))
+                self.stop_event.wait(_poll_wait_seconds(polling_interval, self.settings.poll_sec, in_auction))
         finally:
             if self.settings.sort_by_name and all_orders:
                 self.log("고객명 가나다 순 정렬 중...")

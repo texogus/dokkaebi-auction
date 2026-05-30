@@ -35,7 +35,7 @@ class Settings:
             col_phone=os.getenv("COL_PHONE", "연락처"),
             col_address=os.getenv("COL_ADDRESS", "주소"),
             host_keyword=os.getenv("HOST_KEYWORD", "만물도깨비"),
-            poll_sec=int(os.getenv("POLL_SEC", "6")),
+            poll_sec=max(int(os.getenv("POLL_SEC", "15")), 15),
             sort_by_name=os.getenv("SORT_BY_NAME", "true").lower() in {"1", "true", "yes", "y"},
             output_dir=os.getenv("OUTPUT_DIR", "."),
         )

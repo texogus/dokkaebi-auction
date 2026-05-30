@@ -39,7 +39,7 @@ function currentSettings() {
     blocked_file: blockedFile.value,
     output_dir: outputDir.value,
     host_keyword: hostKeyword.value || '만물도깨비',
-    poll_sec: Number(pollSec.value || 6),
+    poll_sec: Math.max(Number(pollSec.value || 15), 15),
     extra_members: Array.from(extraMembers.values()),
   };
 }
@@ -51,7 +51,7 @@ function applySettings(settings) {
   blockedFile.value = settings.blocked_file || '';
   outputDir.value = settings.output_dir || '';
   hostKeyword.value = settings.host_keyword || '만물도깨비';
-  pollSec.value = settings.poll_sec || 6;
+  pollSec.value = Math.max(Number(settings.poll_sec || 15), 15);
 
   for (const row of settings.extra_members || []) {
     extraMembers.set(row.key, row);
@@ -95,26 +95,44 @@ document.querySelector('#choose-output-dir').addEventListener('click', async () 
   if (path) outputDir.value = path;
 });
 
-addMemberButton.addEventListener('click', () => {
+addMemberButton.addEventListener('click', async () => {
   const displayId = extraId.value.trim();
   if (!displayId) {
     appendLog('추가 회원 아이디를 입력하세요.');
     return;
   }
+  if (!memberFile.value.trim()) {
+    appendLog('회원명단 엑셀 파일을 먼저 선택하세요.');
+    return;
+  }
 
   const key = normalizeId(displayId);
-  extraMembers.set(key, {
+  const member = {
     key,
     display_id: displayId,
     customer_name: extraName.value.trim(),
     phone: extraPhone.value.trim(),
     address: extraAddress.value.trim(),
-  });
-  extraId.value = '';
-  extraName.value = '';
-  extraPhone.value = '';
-  extraAddress.value = '';
-  renderExtraMembers();
+  };
+
+  try {
+    const result = await window.auctionApp.saveExtraMember({
+      member_file: memberFile.value,
+      display_id: member.display_id,
+      customer_name: member.customer_name,
+      phone: member.phone,
+      address: member.address,
+    });
+    extraMembers.set(key, member);
+    extraId.value = '';
+    extraName.value = '';
+    extraPhone.value = '';
+    extraAddress.value = '';
+    renderExtraMembers();
+    appendLog(`회원명단 엑셀 저장 완료: ${member.display_id} (${result.action === 'updated' ? '수정' : '추가'})`);
+  } catch (error) {
+    appendLog(`회원명단 엑셀 저장 실패: ${error.message}`);
+  }
 });
 
 memberRows.addEventListener('click', (event) => {
