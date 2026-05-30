@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build:mac": "electron-packager . DokkaebiAuction --platform=darwin --arch=x64 --out=dist-electron --overwrite --app-bundle-id=com.dokkaebi.auction --executable-name=DokkaebiAuction --ignore='^/build($|/)' --ignore='^/dist($|/)' --ignore='^/dist-electron($|/)' --ignore='^/release($|/)' --ignore='^/node_modules($|/)' --ignore='^/dokkaebi-auction-windows-build-source\\.zip$' --ignore='^/도깨비경매-windows-build-source\\.zip$' --ignore='^/\\.git($|/)'",
-    "build:win": "electron-builder --win nsis --x64",
+    "build:win": "electron-builder --win nsis --x64 --publish never",
     "build:win:monitor": "python -m PyInstaller --noconfirm --clean --onefile --name auction-monitor monitor_entry.py"
   },
   "build": {
